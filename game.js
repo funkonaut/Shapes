@@ -151,7 +151,7 @@ console.log(moves);
         const cellIndex = r * 6 + c;
         const cell = gameBoard.children[cellIndex];
         const targetPiece = boardState[r][c];
-        console.log(currentPlayer);
+        console.log(targetPiece);
 
         if (!targetPiece) {
             // Empty cell: valid move
@@ -294,39 +294,49 @@ function getOmniMoves(row, col, range, color, allowDirectionChange = false) {
     const piece = boardState[row][col];
     const isPentagon = piece && piece.shape === 'pentagon';
 
-    for (const [dr, dc] of directions) {
-        let currentRow = row;
-        let currentCol = col;
-        let steps = 0;
+    // Use a stack for iterative processing, similar to recursion
+    const stack = [[row, col, range]];
 
-        while (steps < range) {
-            currentRow += dr;
-            currentCol += dc;
+    while (stack.length > 0) {
+        const [currentRow, currentCol, remainingRange] = stack.pop();
 
-            if (currentRow < 0 || currentRow >= 6 || currentCol < 0 || currentCol >= 6) break;
+        for (const [dr, dc] of directions) {
+            let tempRow = currentRow;
+            let tempCol = currentCol;
+            let steps = 0;
 
-            const targetPiece = boardState[currentRow][currentCol];
-            if (targetPiece) {
-                if (targetPiece.color === color && targetPiece.shape === 'pentagon') {
-                    // Same-color shield, pass through without consuming a step
-                    if (allowDirectionChange) {
-                        moves.push(...getOmniMoves(currentRow, currentCol, range - steps, color, true));
+            while (steps < remainingRange) {
+                tempRow += dr;
+                tempCol += dc;
+
+                // Check boundaries
+                if (tempRow < 0 || tempRow >= 6 || tempCol < 0 || tempCol >= 6) break;
+
+                const targetPiece = boardState[tempRow][tempCol];
+                if (targetPiece) {
+                    if (targetPiece.color === color && targetPiece.shape === 'pentagon') {
+                        // Same-color shield, pass through without consuming a step
+                        if (allowDirectionChange) {
+                            stack.push([tempRow, tempCol, remainingRange - steps]);
+                        }
+                        break; // Stop processing in this direction
+                    } else if (!isPentagon && targetPiece.color !== color && targetPiece.shape !== 'pentagon') {
+                        // Opposite color and not a shield, capturable if not a pentagon
+                        moves.push([tempRow, tempCol]);
                     }
-                    continue;
-                } else if (!isPentagon && targetPiece.color !== color && targetPiece.shape !== 'pentagon') {
-                    // Opposite color and not a shield, capturable if not a pentagon
-                    moves.push([currentRow, currentCol]);
+                    break; // Stop further moves in this direction
                 }
-                break; // Stop further moves in this direction
-            }
 
-            moves.push([currentRow, currentCol]);
-            steps++;
+                // Add the empty square as a valid move
+                moves.push([tempRow, tempCol]);
+                steps++;
+            }
         }
     }
 
     return moves;
 }
+
 
 function getLinearMoves(row, col, range, color) {
     const moves = [];
