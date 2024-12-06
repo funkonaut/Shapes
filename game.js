@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     initializePieces();
+    updateTurnIndicator();
     console.log("Board initialized on page load.");
 });
 
@@ -431,8 +432,5 @@ function switchTurn() {
     console.log(`Turn switched to ${currentPlayer}`);
 }
 
-// Initialize the indicator when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-    updateTurnIndicator();
-});
+
 
