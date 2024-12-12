@@ -1,9 +1,10 @@
 const gameBoard = document.querySelector('.game-board');
-let currentPlayer = 'white'; // Start with white's turn
+let currentPlayer = 'white'; // Human player is white
+let aiColor = 'black';       // AI is black
 let selectedPiece = null;
-const boardState = Array.from({ length: 6 }, () => Array(6).fill(null)); // 6x6 grid
 
-// Initialize the board on page load
+const boardState = Array.from({ length: 6 }, () => Array(6).fill(null));
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log("Initializing board...");
     for (let row = 0; row < 6; row++) {
@@ -12,9 +13,15 @@ document.addEventListener('DOMContentLoaded', () => {
             cell.classList.add('grid-cell');
             gameBoard.appendChild(cell);
 
+            // Create a dot-container to cover the entire cell
+            const dotContainer = document.createElement('div');
+            dotContainer.classList.add('dot-container');
+            cell.appendChild(dotContainer);
+
+            // Create the small dot inside
             const dot = document.createElement('div');
             dot.classList.add('dot');
-            cell.appendChild(dot);
+            dotContainer.appendChild(dot);
         }
     }
 
@@ -23,7 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("Board initialized on page load.");
 });
 
-// Function to initialize the pieces on the board
 function initializePieces() {
     const pieces = [
         { shape: 'triangle', row: 0, col: 1, color: 'white' },
@@ -56,25 +62,18 @@ function updateBoard() {
     let blackCapturable = 0;
 
     // Clear all existing pieces in the game board
-    Array.from(gameBoard.children).forEach((cell, index) => {
+    Array.from(gameBoard.children).forEach((cell) => {
         const pieces = cell.querySelectorAll('.piece');
-        if (pieces.length > 1) {
-            console.warn(`Duplicate pieces found in cell ${index}. Removing duplicates.`);
-        }
         pieces.forEach(piece => piece.remove());
     });
 
-    // Render pieces from the board state and count capturable pieces for each player
+    // Render pieces from the board state
     boardState.forEach((row, rowIndex) => {
         row.forEach((cell, colIndex) => {
             if (cell) {
-                // Count capturable pieces for each player (ignore shields/pentagons)
                 if (cell.shape !== 'pentagon') {
-                    if (cell.color === 'white') {
-                        whiteCapturable++;
-                    } else if (cell.color === 'black') {
-                        blackCapturable++;
-                    }
+                    if (cell.color === 'white') whiteCapturable++;
+                    else blackCapturable++;
                 }
 
                 const cellElement = gameBoard.children[rowIndex * 6 + colIndex];
@@ -82,8 +81,10 @@ function updateBoard() {
                 shapeElement.classList.add('piece', cell.shape, cell.color);
                 cellElement.appendChild(shapeElement);
 
-                // Attach click handler for selecting a piece
-                shapeElement.addEventListener('click', () => selectPiece(shapeElement, rowIndex, colIndex));
+                // Allow the human player (white) to select their pieces
+                if (currentPlayer === 'white' && cell.color === 'white') {
+                    shapeElement.addEventListener('click', () => selectPiece(shapeElement, rowIndex, colIndex));
+                }
             }
         });
     });
@@ -102,7 +103,6 @@ function updateBoard() {
     }
 }
 
-
 function selectPiece(piece, row, col) {
     console.log(`Selected piece at (${row}, ${col}). Current player: ${currentPlayer}`);
     if (piece.classList.contains(currentPlayer)) {
@@ -117,143 +117,109 @@ function selectPiece(piece, row, col) {
 
         highlightMoves(piece, row, col);
     } else {
-        console.log(boardState);
-
         console.log("Cannot select this piece. It's not the current player's turn.");
     }
 }
 
 function highlightMoves(piece, row, col) {
-    console.log(`Highlighting moves for piece at (${row}, ${col})`);
-
     const shape = piece.classList.contains('triangle') ? 'triangle'
         : piece.classList.contains('circle') ? 'circle'
         : piece.classList.contains('square') ? 'square'
         : 'pentagon';
-console.log(shape);
-    let moves = [];
-    switch (shape) {
-        case 'triangle':
-            moves = getDiagonalMoves(row, col, 3, currentPlayer);
-            break;
-        case 'circle':
-            moves = getOmniMoves(row, col, 1, currentPlayer, true); // Allow direction changes
-            break;
-        case 'square':
-            moves = getLinearMoves(row, col, 2, currentPlayer);
-            break;
-        case 'pentagon':
-            moves = getOmniMoves(row, col, 1, currentPlayer); // Shields can't capture
-            break;
-    }
-console.log(moves);
+
+    const moves = getMovesForPiece(boardState, row, col, shape, currentPlayer);
 
     moves.forEach(([r, c]) => {
         const cellIndex = r * 6 + c;
         const cell = gameBoard.children[cellIndex];
         const targetPiece = boardState[r][c];
-        console.log(targetPiece);
+        const dotContainer = cell.querySelector('.dot-container');
+        const dot = cell.querySelector('.dot');
 
         if (!targetPiece) {
             // Empty cell: valid move
-            const dot = cell.querySelector('.dot');
+            // Color the dot green to indicate a valid move target
             dot.style.backgroundColor = 'green';
-            dot.dataset.moveTarget = true;
-            dot.addEventListener('click', movePiece);
-
-        } else if (targetPiece.color !== currentPlayer && targetPiece.shape !== 'pentagon') { 
-            // Capturable piece logic: opposite color and not a shield
+            dotContainer.dataset.moveTarget = true;
+            dotContainer.removeEventListener('click', movePiece);
+            dotContainer.addEventListener('click', movePiece);
+        } else if (targetPiece.color !== currentPlayer && targetPiece.shape !== 'pentagon') {
+            // Capturable piece
             const enemyPiece = cell.querySelector('.piece');
-            console.log('enemy piece: (${enemyPiece})');
-            console.log(enemyPiece.classList);
-            if (enemyPiece) {
-                if (enemyPiece.classList.contains('triangle')) {
-                    enemyPiece.style.borderBottomColor = 'red';
-                } else {
-                    enemyPiece.style.backgroundColor = 'red';
-                }
-                enemyPiece.dataset.captureTarget = true;
-                enemyPiece.dataset.row = r;
-                enemyPiece.dataset.col = c;
-                enemyPiece.addEventListener('click', capturePiece);
+            if (enemyPiece.classList.contains('triangle')) {
+                enemyPiece.style.borderBottomColor = 'red';
+            } else {
+                enemyPiece.style.backgroundColor = 'red';
             }
+            enemyPiece.dataset.captureTarget = true;
+            enemyPiece.dataset.row = r;
+            enemyPiece.dataset.col = c;
+            enemyPiece.removeEventListener('click', capturePiece);
+            enemyPiece.addEventListener('click', capturePiece);
         }
     });
 }
 
 function movePiece(event) {
-    const targetDot = event.target;
-    const cell = targetDot.parentElement;
-
-    if (selectedPiece && targetDot.dataset.moveTarget) {
+    // event.target could be the dot or dot-container; find the cell:
+    const dotContainer = event.currentTarget;
+    if (selectedPiece && dotContainer.dataset.moveTarget) {
+        const cell = dotContainer.parentElement;
         const { piece, row, col } = selectedPiece;
 
-        // Update board state
         const targetIndex = Array.from(gameBoard.children).indexOf(cell);
         const targetRow = Math.floor(targetIndex / 6);
         const targetCol = targetIndex % 6;
-        boardState[row][col] = null; // Remove from current position
+        boardState[row][col] = null;
         boardState[targetRow][targetCol] = {
             shape: piece.classList[1],
             color: currentPlayer
         };
 
-        // Move the piece
         cell.appendChild(piece);
-
-        // Clear highlights and reset state
         clearHighlights();
         selectedPiece = null;
-
-        // Switch turns
         switchTurn();
-        updateBoard(); // Redraw the board to reflect the state
+        updateBoard();
     }
 }
+
 function capturePiece(event) {
-    const targetDot = event.target;
-    const cell = targetDot.parentElement;
-    console.log(selectedPiece);
-    if (selectedPiece && targetDot.dataset.captureTarget) {
+    const targetPiece = event.currentTarget;
+    const cell = targetPiece.parentElement;
+
+    if (selectedPiece && targetPiece.dataset.captureTarget) {
         const { piece, row, col } = selectedPiece;
 
-        // Get target position
         const targetIndex = Array.from(gameBoard.children).indexOf(cell);
         const targetRow = Math.floor(targetIndex / 6);
         const targetCol = targetIndex % 6;
 
-        const targetPiece = boardState[targetRow][targetCol];
+        const targetPieceState = boardState[targetRow][targetCol];
 
-        // Ensure it's an opponent's piece and not a shield
-        if (targetPiece && targetPiece.color !== currentPlayer && targetPiece.shape !== 'pentagon') {
-            console.log(`Captured ${targetPiece.color} ${targetPiece.shape} at (${targetRow}, ${targetCol}).`);
+        // Check capture rules:
+        const movingPieceShape = piece.classList[1];
+        if (movingPieceShape === 'pentagon') {
+            console.log("Pentagons cannot capture. Move invalid.");
+            return;
+        }
 
-            // Remove the captured piece from the board state
+        if (targetPieceState && targetPieceState.color !== currentPlayer && targetPieceState.shape !== 'pentagon') {
+            console.log(`Captured ${targetPieceState.color} ${targetPieceState.shape} at (${targetRow}, ${targetCol}).`);
             boardState[targetRow][targetCol] = null;
-
-            // Remove the captured piece from the DOM
-            const capturedPieceElement = document.querySelector(`[data-row="${targetRow}"][data-col="${targetCol}"] .piece`);
-            if (capturedPieceElement) capturedPieceElement.remove();
-
-            // Update board state for the moving piece
-            boardState[row][col] = null; // Clear old position
+            boardState[row][col] = null;
             boardState[targetRow][targetCol] = {
-                shape: piece.classList[1],
+                shape: movingPieceShape,
                 color: currentPlayer
             };
-
-            // Move the piece
             cell.appendChild(piece);
 
-            // Clear highlights and reset state
             clearHighlights();
             selectedPiece = null;
-
-            // Switch turns
             switchTurn();
-            updateBoard(); // Redraw the board to reflect the state
+            updateBoard();
         } else {
-            console.log("Cannot capture: either it's not an opponent piece or it's a shield.");
+            console.log("Cannot capture: either not opponent piece or shield or same color.");
         }
     } else {
         console.log("No valid piece selected or invalid capture target.");
@@ -261,16 +227,18 @@ function capturePiece(event) {
 }
 
 function clearHighlights() {
-    // Reset dot highlights
-    document.querySelectorAll('.dot').forEach(dot => {
-        dot.style.backgroundColor = 'black';
-        dot.removeEventListener('click', movePiece);
-        delete dot.dataset.moveTarget;
+    document.querySelectorAll('.dot-container').forEach(dc => {
+        dc.removeEventListener('click', movePiece);
+        delete dc.dataset.moveTarget;
     });
 
-    // Reset piece highlights
+    document.querySelectorAll('.dot').forEach(dot => {
+        dot.style.backgroundColor = 'black';
+    });
+
     document.querySelectorAll('.piece').forEach(piece => {
         piece.style.backgroundColor = '';
+        piece.style.borderBottomColor = '';
         piece.removeEventListener('click', capturePiece);
         delete piece.dataset.captureTarget;
     });
@@ -285,17 +253,50 @@ function clearHighlights() {
     }
 }
 
-function getOmniMoves(row, col, range, color, allowDirectionChange = false) {
+function updateTurnIndicator() {
+    const turnIndicator = document.querySelector('.turn-indicator');
+    if (turnIndicator) {
+        turnIndicator.style.backgroundColor = currentPlayer === 'white' ? 'white' : 'black';
+    }
+}
+
+function switchTurn() {
+    currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
+    updateTurnIndicator();
+    console.log(`Turn switched to ${currentPlayer}`);
+    // If it's the AI's turn, make the AI move
+    if (currentPlayer === aiColor) {
+        setTimeout(aiMove, 500);
+    }
+}
+
+// ============================
+// Move Generation Functions
+// ============================
+
+function getMovesForPiece(state, row, col, shape, color) {
+    if (shape === 'triangle') {
+        return getDiagonalMoves(state, row, col, 3, color);
+    } else if (shape === 'circle') {
+        return getOmniMoves(state, row, col, 1, color, true);
+    } else if (shape === 'square') {
+        return getLinearMoves(state, row, col, 2, color);
+    } else if (shape === 'pentagon') {
+        return getOmniMoves(state, row, col, 1, color, false);
+    }
+    return [];
+}
+
+function getOmniMoves(state, row, col, range, color, allowDirectionChange = false) {
     const moves = [];
     const directions = [
-        [-1, 0], [1, 0], [0, -1], [0, 1],  // Cardinal directions
-        [-1, -1], [-1, 1], [1, -1], [1, 1] // Diagonal directions
+        [-1, 0], [1, 0], [0, -1], [0, 1],
+        [-1, -1], [-1, 1], [1, -1], [1, 1]
     ];
 
-    const piece = boardState[row][col];
-    const isPentagon = piece && piece.shape === 'pentagon';
+    const piece = state[row][col];
+    const isPentagon = (piece && piece.shape === 'pentagon');
 
-    // Use a stack for iterative processing, similar to recursion
     const stack = [[row, col, range]];
 
     while (stack.length > 0) {
@@ -310,25 +311,23 @@ function getOmniMoves(row, col, range, color, allowDirectionChange = false) {
                 tempRow += dr;
                 tempCol += dc;
 
-                // Check boundaries
                 if (tempRow < 0 || tempRow >= 6 || tempCol < 0 || tempCol >= 6) break;
 
-                const targetPiece = boardState[tempRow][tempCol];
+                const targetPiece = state[tempRow][tempCol];
                 if (targetPiece) {
                     if (targetPiece.color === color && targetPiece.shape === 'pentagon') {
-                        // Same-color shield, pass through without consuming a step
+                        // Same-color pentagon: pass through without using a step
                         if (allowDirectionChange) {
+                            // Direction changes allowed: push a new starting point
                             stack.push([tempRow, tempCol, remainingRange - steps]);
                         }
-                        break; // Stop processing in this direction
+                        continue;
                     } else if (!isPentagon && targetPiece.color !== color && targetPiece.shape !== 'pentagon') {
-                        // Opposite color and not a shield, capturable if not a pentagon
                         moves.push([tempRow, tempCol]);
                     }
-                    break; // Stop further moves in this direction
+                    break;
                 }
 
-                // Add the empty square as a valid move
                 moves.push([tempRow, tempCol]);
                 steps++;
             }
@@ -338,15 +337,14 @@ function getOmniMoves(row, col, range, color, allowDirectionChange = false) {
     return moves;
 }
 
-
-function getLinearMoves(row, col, range, color) {
+function getLinearMoves(state, row, col, range, color) {
     const moves = [];
     const directions = [
-        [-1, 0], [1, 0], [0, -1], [0, 1] // Cardinal directions only
+        [-1, 0], [1, 0], [0, -1], [0, 1]
     ];
 
-    const piece = boardState[row][col];
-    const isPentagon = piece && piece.shape === 'pentagon';
+    const piece = state[row][col];
+    const isPentagon = (piece && piece.shape === 'pentagon');
 
     for (const [dr, dc] of directions) {
         let currentRow = row;
@@ -359,35 +357,32 @@ function getLinearMoves(row, col, range, color) {
 
             if (currentRow < 0 || currentRow >= 6 || currentCol < 0 || currentCol >= 6) break;
 
-            const targetPiece = boardState[currentRow][currentCol];
+            const targetPiece = state[currentRow][currentCol];
             if (targetPiece) {
                 if (targetPiece.color === color && targetPiece.shape === 'pentagon') {
-                    // Same-color shield, pass through without consuming a step
                     continue;
                 } else if (!isPentagon && targetPiece.color !== color && targetPiece.shape !== 'pentagon') {
-                    // Opposite color and not a shield, capturable if not a pentagon
                     moves.push([currentRow, currentCol]);
                 }
-                break; // Stop further moves in this direction
+                break;
             }
 
             moves.push([currentRow, currentCol]);
             steps++;
         }
     }
-console.log("hello");
-console.log(moves);
+
     return moves;
 }
 
-function getDiagonalMoves(row, col, range, color) {
+function getDiagonalMoves(state, row, col, range, color) {
     const moves = [];
     const directions = [
-        [-1, -1], [-1, 1], [1, -1], [1, 1] // Diagonal directions only
+        [-1, -1], [-1, 1], [1, -1], [1, 1]
     ];
 
-    const piece = boardState[row][col];
-    const isPentagon = piece && piece.shape === 'pentagon';
+    const piece = state[row][col];
+    const isPentagon = (piece && piece.shape === 'pentagon');
 
     for (const [dr, dc] of directions) {
         let currentRow = row;
@@ -400,16 +395,14 @@ function getDiagonalMoves(row, col, range, color) {
 
             if (currentRow < 0 || currentRow >= 6 || currentCol < 0 || currentCol >= 6) break;
 
-            const targetPiece = boardState[currentRow][currentCol];
+            const targetPiece = state[currentRow][currentCol];
             if (targetPiece) {
                 if (targetPiece.color === color && targetPiece.shape === 'pentagon') {
-                    // Same-color shield, pass through without consuming a step
                     continue;
                 } else if (!isPentagon && targetPiece.color !== color && targetPiece.shape !== 'pentagon') {
-                    // Opposite color and not a shield, capturable if not a pentagon
                     moves.push([currentRow, currentCol]);
                 }
-                break; // Stop further moves in this direction
+                break;
             }
 
             moves.push([currentRow, currentCol]);
@@ -420,17 +413,137 @@ function getDiagonalMoves(row, col, range, color) {
     return moves;
 }
 
-function updateTurnIndicator() {
-    const turnIndicator = document.querySelector('.turn-indicator');
-    turnIndicator.style.backgroundColor = currentPlayer === 'white' ? 'white' : 'black';
+// ============================
+// AI and Minimax Implementation
+// ============================
+
+function aiMove() {
+    const bestMove = minimaxRoot(boardState, aiColor, 3); // Depth can be adjusted
+    if (bestMove) {
+        applyMoveToRealBoard(bestMove);
+        switchTurn();
+        updateBoard();
+    }
 }
 
-// Call this function whenever the turn changes
-function switchTurn() {
-    currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
-    updateTurnIndicator();
-    console.log(`Turn switched to ${currentPlayer}`);
+function getAllMoves(state, player) {
+    const moves = [];
+    for (let r = 0; r < 6; r++) {
+        for (let c = 0; c < 6; c++) {
+            const piece = state[r][c];
+            if (piece && piece.color === player) {
+                const possibleMoves = getMovesForPiece(state, r, c, piece.shape, player);
+                possibleMoves.forEach(m => {
+                    const target = state[m[0]][m[1]];
+                    const isPentagon = (piece.shape === 'pentagon');
+                    let capture = false;
+                    if (target && target.color !== player && target.shape !== 'pentagon' && !isPentagon) {
+                        capture = true;
+                    }
+                    moves.push({
+                        from: {row: r, col: c},
+                        to: {row: m[0], col: m[1]},
+                        capture: capture
+                    });
+                });
+            }
+        }
+    }
+    return moves;
 }
 
+function applyMove(state, move) {
+    const newState = JSON.parse(JSON.stringify(state));
+    const piece = newState[move.from.row][move.from.col];
+    newState[move.from.row][move.from.col] = null;
+    newState[move.to.row][move.to.col] = piece;
+    return newState;
+}
 
+function evaluateBoard(state) {
+    let whiteCapturable = 0;
+    let blackCapturable = 0;
+    for (let r = 0; r < 6; r++) {
+        for (let c = 0; c < 6; c++) {
+            const cell = state[r][c];
+            if (cell && cell.shape !== 'pentagon') {
+                if (cell.color === 'white') whiteCapturable++;
+                if (cell.color === 'black') blackCapturable++;
+            }
+        }
+    }
+    if (aiColor === 'black') {
+        return blackCapturable - whiteCapturable;
+    } else {
+        return whiteCapturable - blackCapturable;
+    }
+}
 
+function gameIsOver(state) {
+    let whiteCapturable = 0;
+    let blackCapturable = 0;
+    for (let r = 0; r < 6; r++) {
+        for (let c = 0; c < 6; c++) {
+            const cell = state[r][c];
+            if (cell && cell.shape !== 'pentagon') {
+                if (cell.color === 'white') whiteCapturable++;
+                if (cell.color === 'black') blackCapturable++;
+            }
+        }
+    }
+    return (whiteCapturable === 1 || blackCapturable === 1);
+}
+
+function minimax(state, depth, isMaximizingPlayer, aiColor) {
+    if (depth === 0 || gameIsOver(state)) {
+        return evaluateBoard(state);
+    }
+
+    const player = isMaximizingPlayer ? aiColor : (aiColor === 'white' ? 'black' : 'white');
+    const moves = getAllMoves(state, player);
+
+    if (moves.length === 0) {
+        return evaluateBoard(state);
+    }
+
+    if (isMaximizingPlayer) {
+        let bestVal = -Infinity;
+        for (const move of moves) {
+            const newState = applyMove(state, move);
+            const value = minimax(newState, depth - 1, false, aiColor);
+            bestVal = Math.max(bestVal, value);
+        }
+        return bestVal;
+    } else {
+        let bestVal = Infinity;
+        for (const move of moves) {
+            const newState = applyMove(state, move);
+            const value = minimax(newState, depth - 1, true, aiColor);
+            bestVal = Math.min(bestVal, value);
+        }
+        return bestVal;
+    }
+}
+
+function minimaxRoot(state, player, depth) {
+    const moves = getAllMoves(state, player);
+    let bestMove = null;
+    let bestValue = -Infinity;
+
+    for (const move of moves) {
+        const newState = applyMove(state, move);
+        const value = minimax(newState, depth - 1, false, player);
+        if (value > bestValue) {
+            bestValue = value;
+            bestMove = move;
+        }
+    }
+
+    return bestMove;
+}
+
+function applyMoveToRealBoard(move) {
+    const piece = boardState[move.from.row][move.from.col];
+    boardState[move.from.row][move.from.col] = null;
+    boardState[move.to.row][move.to.col] = piece;
+}
